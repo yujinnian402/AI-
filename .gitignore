@@ -1,0 +1,16 @@
+# python虚拟环境-无需提交，体积大
+venv/
+env/
+
+# 敏感信息:存放 Deepseek API Key
+.env
+
+# python编译缓存文件
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 日志文件-AI项目运行产生的临时日志
+*.log
+tmp/
