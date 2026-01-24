@@ -11,6 +11,23 @@ __pycache__/
 *.pyo
 *.pyd
 
+# IDE
+.idea/
+.vscode/
+
+# Python tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Packaging / build
+build/
+dist/
+*.egg-info/
+
+
 # 日志文件-AI项目运行产生的临时日志
 *.log
 tmp/
