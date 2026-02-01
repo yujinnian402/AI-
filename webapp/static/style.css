@@ -1,0 +1,26 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif; }
+.app { display: grid; grid-template-columns: 340px 1fr; height: 100vh; }
+
+.panel { border-right: 1px solid #ddd; padding: 14px; overflow: auto; background: #fafafa; }
+.panel h2 { margin: 6px 0 12px; }
+.panel label { display:block; margin-top: 10px; font-size: 13px; color: #333; }
+.panel textarea, .panel input, .panel select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 8px; background: white; }
+.row { display:flex; gap: 8px; align-items: center; margin-top: 10px; }
+.row button { padding: 8px 10px; border: 1px solid #ccc; border-radius: 8px; background: white; cursor: pointer; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px; }
+.chk { display:flex; gap: 8px; align-items: center; font-size: 13px; }
+.status { margin-top: 12px; padding: 8px; border-radius: 8px; background: #fff; border: 1px solid #ddd; color: #555; }
+.usage { margin-top: 8px; color: #666; font-size: 12px; word-break: break-all; }
+
+.chat { display:flex; flex-direction: column; height: 100vh; }
+.messages { flex: 1; padding: 16px; overflow: auto; background: white; }
+.msg { max-width: 920px; margin: 10px auto; padding: 10px 12px; border-radius: 12px; border: 1px solid #e6e6e6; }
+.msg.you { background: #f6fbff; }
+.msg.ai { background: #fff; }
+.meta { font-size: 12px; color: #666; margin-bottom: 6px; }
+.content { white-space: pre-wrap; line-height: 1.5; }
+
+.composer { display:flex; gap: 10px; padding: 12px; border-top: 1px solid #ddd; background: #fafafa; }
+.composer textarea { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 10px; resize: none; }
+.composer button { width: 110px; border: 1px solid #ccc; border-radius: 10px; background: white; cursor: pointer; }

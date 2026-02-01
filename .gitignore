@@ -4,6 +4,8 @@ env/
 
 # 敏感信息:存放 Deepseek API Key
 .env
+.venv/
+.env.*
 
 # python编译缓存文件
 __pycache__/

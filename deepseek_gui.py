@@ -4,6 +4,11 @@ import sys
 from typing import List, Dict, Any
 
 from dotenv import load_dotenv
+load_dotenv()
+
+os.environ.setdefault("QT_IM_MODULE", "fcitx")
+os.environ.setdefault("XMODIFIERS", "@im=fcitx")
+
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
