@@ -18,6 +18,77 @@ const usageEl = el("usage");
 const totalEl = el("total");
 const refreshBtn = el("refreshModels");
 
+// ===== auth elements =====
+const authOverlay = el("authOverlay");
+const loginUserEl = el("loginUser");
+const loginPassEl = el("loginPass");
+const loginBtn = el("loginBtn");
+const loginErr = el("loginErr");
+
+function showLogin(msg=""){
+  authOverlay.style.display = "flex";
+  loginErr.textContent = msg;
+  sendBtn.disabled = true;
+}
+function hideLogin(){
+  authOverlay.style.display = "none";
+  loginErr.textContent = "";
+  sendBtn.disabled = false;
+}
+
+async function apiFetch(url, options = {}) {
+  const r = await fetch(url, {
+    credentials: "include",
+    ...options
+  });
+  if (r.status === 401) {
+    showLogin("请先登录（否则任何人都能消耗你的 tokens）");
+    throw new Error("401 Not logged in");
+  }
+  return r;
+}
+
+async function checkAuth(){
+  try{
+    const r = await apiFetch("/api/me");
+    const data = await r.json();
+    if (!data.logged_in) showLogin();
+    else hideLogin();
+  }catch(e){
+    // apiFetch 已处理 401
+  }
+}
+
+async function doLogin(){
+  const username = loginUserEl.value.trim();
+  const password = loginPassEl.value;
+  if (!username || !password) {
+    loginErr.textContent = "账号/密码不能为空";
+    return;
+  }
+  try{
+    const r = await fetch("/api/login", {
+      method: "POST",
+      credentials: "include",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({username, password})
+    });
+    if (!r.ok) {
+      const t = await r.text();
+      loginErr.textContent = "登录失败：" + t;
+      return;
+    }
+    hideLogin();
+    setStatus("login ok");
+    refreshModels();
+  }catch(e){
+    loginErr.textContent = "登录失败：" + e.message;
+  }
+}
+
+loginBtn.addEventListener("click", doLogin);
+
+
 let chatMessages = [];     // 多轮对话记忆栈（前端保存即可）
 let totalUsage = {};       // 累计 usage
 
@@ -68,7 +139,7 @@ function usageLine(obj) {
 
 async function refreshModels() {
   try {
-    const r = await fetch("/api/models");
+    const r = await apiFetch("/api/models");
     const data = await r.json();
     const models = data.models || ["deepseek-chat", "deepseek-reasoner"];
     const cur = modelEl.value;
@@ -111,7 +182,7 @@ async function send() {
   };
 
   try {
-    const r = await fetch("/api/chat", {
+    const r = await apiFetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req)
@@ -174,3 +245,4 @@ systemEl.value = "你是一个严谨但不无聊的计算机导师。回答要�
 ensureSystem();
 refreshModels();
 setStatus("ready");
+checkAuth();

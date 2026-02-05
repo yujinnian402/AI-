@@ -7,7 +7,27 @@
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-  <div class="app">
+<!-- 登录遮罩层（未登录时显示） -->
+<div class="auth-overlay" id="authOverlay" style="display:none;">
+  <div class="auth-card">
+    <h2>登录</h2>
+    <div class="auth-row">
+      <label>账号</label>
+      <input id="loginUser" autocomplete="username" />
+    </div>
+    <div class="auth-row">
+      <label>密码</label>
+      <input id="loginPass" type="password" autocomplete="current-password" />
+    </div>
+    <div class="auth-actions">
+      <button id="loginBtn">登录</button>
+      <div class="auth-err" id="loginErr"></div>
+    </div>
+  </div>
+</div>
+
+
+<div class="app">
     <aside class="panel">
       <h2>Settings</h2>
 

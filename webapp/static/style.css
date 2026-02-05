@@ -24,3 +24,28 @@ body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Pi
 .composer { display:flex; gap: 10px; padding: 12px; border-top: 1px solid #ddd; background: #fafafa; }
 .composer textarea { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 10px; resize: none; }
 .composer button { width: 110px; border: 1px solid #ccc; border-radius: 10px; background: white; cursor: pointer; }
+.auth-overlay{
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.35);
+  display:flex; align-items:center; justify-content:center;
+  z-index: 9999;
+}
+.auth-card{
+  width: 360px;
+  background: white;
+  border-radius: 14px;
+  border: 1px solid #ddd;
+  padding: 16px;
+}
+.auth-row{ margin-top: 10px; }
+.auth-row label{ display:block; font-size:13px; color:#333; margin-bottom:6px; }
+.auth-row input{
+  width:100%; padding:10px;
+  border:1px solid #ccc; border-radius:10px;
+}
+.auth-actions{ margin-top: 12px; display:flex; gap:10px; align-items:center; }
+.auth-actions button{
+  padding:10px 12px; border:1px solid #ccc;
+  border-radius:10px; background:#fff; cursor:pointer;
+}
+.auth-err{ color:#b00020; font-size:12px; }
