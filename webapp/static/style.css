@@ -49,3 +49,63 @@ body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Pi
   border-radius:10px; background:#fff; cursor:pointer;
 }
 .auth-err{ color:#b00020; font-size:12px; }
+.auth-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.35);
+  display:flex; align-items:center; justify-content:center; z-index:9999; }
+.auth-card{ width:380px; background:#fff; border:1px solid #ddd; border-radius:14px; padding:16px; }
+.auth-tabs{ display:flex; gap:8px; }
+.auth-tabs .tab{ flex:1; padding:10px; border:1px solid #ccc; border-radius:10px; background:#fff; cursor:pointer; }
+.auth-tabs .active{ border-color:#111; font-weight:600; }
+.auth-row{ margin-top:12px; }
+.auth-row label{ display:block; font-size:13px; margin-bottom:6px; }
+.auth-row input{ width:100%; padding:10px; border:1px solid #ccc; border-radius:10px; }
+.auth-actions{ margin-top:12px; display:flex; gap:10px; align-items:center; }
+.auth-actions button{ padding:10px 12px; border:1px solid #ccc; border-radius:10px; background:#fff; cursor:pointer; }
+.auth-err{ color:#b00020; font-size:12px; }
+.auth-hint{ margin-top:10px; color:#666; font-size:12px; }
+
+/* OAuth 图标按钮 */
+.auth-oauth {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+.oauth-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  background: #fff;
+  text-decoration: none;
+  color: #333;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+.oauth-btn:hover {
+  border-color: #999;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.10);
+  transform: translateY(-1px);
+}
+.oauth-btn:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* 分割线 */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0;
+  font-size: 12px;
+  color: #999;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #e5e5e5;
+}
