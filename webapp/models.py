@@ -13,4 +13,5 @@ class User(Base): # Python的SQLAlchemy ORM模型类
     password_hash = Column(String(255), nullable=True)
     provider = Column(String(32), nullable=False, default="password")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    role = Column(String(16), nullable=False, default="user")
 

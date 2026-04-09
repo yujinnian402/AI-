@@ -45,6 +45,7 @@
 
     <div class="auth-actions">
       <button id="authSubmit">继续</button>
+      <button id="rootFaceRealtimeLogin">Root 实时人脸登录</button>
       <div class="auth-err" id="authErr"></div>
     </div>
 
@@ -94,6 +95,7 @@
       <div class="row">
         <button id="reset">重置对话</button>
         <button id="logout">退出登录</button>
+        <button id="rootFaceEnroll">录入人脸</button>
       </div>
 
       <div class="status" id="status">ready</div>
@@ -111,6 +113,22 @@
     </main>
   </div>
 
-  <script src="static/app.js?v=3"></script>
+  <div id="camModal" class="cam-modal" style="display:none;">
+  <div class="cam-card">
+    <div class="cam-title" id="camTitle">摄像头</div>
+    <div class="cam-video-wrap">
+      <video id="camVideo" autoplay playsinline muted></video>
+      <canvas id="camOverlay"></canvas>
+    </div>
+    <canvas id="camCanvas" style="display:none;"></canvas>
+    <div class="cam-actions">
+      <button id="camCaptureEnroll">拍照录入</button>
+      <button id="camStop">关闭摄像头</button>
+    </div>
+    <div id="camHint" class="cam-hint"></div>
+  </div>
+</div>
+
+  <script src="static/app.js?v=5"></script>
 </body>
 </html>

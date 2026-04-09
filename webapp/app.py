@@ -17,12 +17,19 @@ from sqlalchemy.orm import Session # SQLAlchemy的数据库会话类,用于数�
 from deepseek_client import DeepSeekConfig, DeepSeekClient
 
 # 数据库连接和用户表模型
-# db.py给app.py暴露2个核心能力:数据库总引擎和按请求提供数据库会话的依赖函数
-from webapp.db import engine, get_db
+# db.py给app.py暴露2个核心能力:数据库总引擎,按请求提供数据库会话的依赖函数以及会话工厂
+from webapp.db import engine, get_db, SessionLocal
 from webapp.models import Base, User
 
 from authlib.integrations.starlette_client import OAuth # Authlib提供的OAuth客户端工具
 from starlette.responses import RedirectResponse
+
+import json # 处理JSON数据,便于Python和JSON(网络传输格式)之间转换
+import secrets # 生成安全随机数
+from sqlalchemy import text
+
+from webapp.bootstrap import run_lightweight_migrations, ensure_root_user
+from webapp.face_auth import face_engine
 
 # 启动时把.env变量载入进os.environ,后续os.environ.get("VAR_NAME")才能拿到key/secret
 load_dotenv()
@@ -32,7 +39,7 @@ app = FastAPI(title="Lara's little home")
 
 # OAuth注册配置
 oauth = OAuth() # 初始化OAuth管理器
-# 配置github的授权地址,换token地址,scope（Github采用的是标准的OAuth 2.0授权码模式）
+# 配置github的授权地址,换token地址,scope(Github采用的是标准的OAuth 2.0授权码模式)
 oauth.register(
     name="github",
     client_id=os.environ.get("GITHUB_CLIENT_ID"),
@@ -42,7 +49,7 @@ oauth.register(
     api_base_url="https://api.github.com/",
     client_kwargs={"scope": "user:email"},
 )
-# google用server_metadata_url自动发现OIDC端点,scope包含openid email profile（Google实现了OpenID Connect协议）
+# google用server_metadata_url自动发现OIDC端点,scope包含openid email profile(Google实现了OpenID Connect协议)
 oauth.register(
     name="google",
     client_id=os.environ.get("GOOGLE_CLIENT_ID"),
@@ -100,9 +107,11 @@ async def oauth_callback(provider: str, request: Request, db: Session = Depends(
         raise HTTPException(status_code=400, detail="Cannot get email from provider")
 
     email = email.strip().lower()
+    if ROOT_EMAIL and hmac.compare_digest(email, ROOT_EMAIL): # 安全的比较两个字符串是否完全相等的写法
+        raise HTTPException(status_code=403, detail="Root account cannot use OAuth login")
     user = db.query(User).filter(User.email == email).first() # User是数据库的表模型
     if not user:
-        user = User(email=email, provider=provider, password_hash=None)
+        user = User(email=email, provider=provider, password_hash=None,role="user")
         db.add(user)
         db.commit()
         db.refresh(user)
@@ -113,27 +122,42 @@ async def oauth_callback(provider: str, request: Request, db: Session = Depends(
 
 API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 APP_SECRET_KEY = os.environ.get("APP_SECRET_KEY", "")
-APP_HTTPS_ONLY = os.environ.get("APP_HTTPS_ONLY", "0") == "1"  # Render 上建议=1，本地开发=0
+APP_HTTPS_ONLY = os.environ.get("APP_HTTPS_ONLY", "0") == "1"  # Render 上建议=1,本地开发=0
+ROOT_EMAIL = os.environ.get("ROOT_EMAIL", "").strip().lower()
+ROOT_PASSWORD = os.environ.get("ROOT_PASSWORD", "")
 
 if not API_KEY:
     raise RuntimeError("Missing DEEPSEEK_API_KEY (export it or put in .env)")
 if not APP_SECRET_KEY:
-    # 没有 secret_key 会导致 session 签名不稳定（重启就全掉线）
+    # 没有 secret_key 会导致 session 签名不稳定(重启就全掉线)
     raise RuntimeError("Missing APP_SECRET_KEY (set a random secret in env)")
 
-# Base是ORM模型的基类,在models.py里定义了User表模型,所以这里会在数据库里创建一个用户表(如果不存在的话)
-# metadata是Base类的一个属性，代表数据库结构信息
-Base.metadata.create_all(bind=engine)
+pwd = CryptContext(schemes=["bcrypt"], deprecated="auto") # 密码哈希配置
 
-# Session 中间件：用 cookie 保存登录态
+# Base是ORM模型的基类,在models.py里定义了User表模型,所以这里会在数据库里创建一个用户表(如果不存在的话)
+# metadata是Base类的一个属性,代表数据库结构信息
+Base.metadata.create_all(bind=engine)
+run_lightweight_migrations(engine)
+
+# 启动时确保 root 账号存在(仅后端环境变量可创建)
+_boot_db = SessionLocal()
+try:
+    ensure_root_user(
+        db=_boot_db,
+        pwd=pwd if "pwd" in globals() else CryptContext(schemes=["bcrypt"], deprecated="auto"),
+        root_email=ROOT_EMAIL,
+        root_password=ROOT_PASSWORD,
+    )
+finally:
+    _boot_db.close()
+
+# Session 中间件:,用 cookie 保存登录态
 app.add_middleware(
     SessionMiddleware, # Starlette提供的Session中间件,给FastAPI添加request.session
-    secret_key=APP_SECRET_KEY, # Session加密密钥,使cookie在浏览器里，用户无法自己更改
+    secret_key=APP_SECRET_KEY, # Session加密密钥,使cookie在浏览器里,用户无法自己更改
     https_only=APP_HTTPS_ONLY, # 防HTTP抓包
     same_site="lax", # CSRF(跨站请求伪造)防护策略
 )
-
-pwd = CryptContext(schemes=["bcrypt"], deprecated="auto") # 密码哈希配置
 
 client = DeepSeekClient(DeepSeekConfig(api_key=API_KEY)) # 初始化AI客户端
 
@@ -178,6 +202,11 @@ def require_user(request: Request, db: Session = Depends(get_db)) -> User:
         raise HTTPException(status_code=401, detail="Invalid session")
     return user
 
+def require_root(user: User = Depends(require_user)) -> User:
+    if user.role != "root":
+        raise HTTPException(status_code=403, detail="Root only")
+    return user
+
 # 注册接口请求的数据结构,注意这里的class更多的代表是一种数据模型类的意思,描述数据结构,定义JSON长什么样
 # BaseModel来自pydantic库,RegisterReq类继承自BaseModel,获得JSON自动解析,类型校验,自动文档的能力
 class RegisterReq(BaseModel):
@@ -193,6 +222,7 @@ class LoginReq(BaseModel):
 class MeResp(BaseModel):
     logged_in: bool
     email: Optional[str] = None # 此处Optinal等价于 或
+    role: Optional[str] = None
 
 # 聊天接口的请求结构
 class ChatRequest(BaseModel):
@@ -202,6 +232,21 @@ class ChatRequest(BaseModel):
     top_p: float = 0.9
     max_tokens: int = 1200
     keep_turns: int = 20
+
+# json转成Python对象
+class RootFaceLoginReq(BaseModel):
+    email: str
+    nonce: str
+    image_b64: str
+
+
+class RootFacePreviewReq(BaseModel):
+    email: str
+    image_b64: str
+
+
+class RootFaceEnrollReq(BaseModel):
+    image_b64: str
 
 
 @app.get("/api/models")
@@ -255,7 +300,7 @@ def me(request: Request, db: Session = Depends(get_db)):
     if not user:
         request.session.clear()
         return MeResp(logged_in=False)
-    return MeResp(logged_in=True, email=user.email) # 如果前面的检验都通过了,就给前端返回MeResp这样的信息
+    return MeResp(logged_in=True, email=user.email, role=user.role) # 如果前面的检验都通过了,就给前端返回MeResp这样的信息
 
 @app.post("/api/register") # 当前端用POST请求,访问/api/register,就执行下面这个register()函数
 def register(req: RegisterReq, request: Request, db: Session = Depends(get_db)):
@@ -271,6 +316,7 @@ def register(req: RegisterReq, request: Request, db: Session = Depends(get_db)):
         email=email,
         password_hash=pwd.hash(req.password),
         provider="password",
+        role="user",
     )
     db.add(u)
     db.commit()
@@ -314,6 +360,129 @@ def chat(req: ChatRequest, user: User = Depends(require_user)):
         "usage": resp.get("usage"),
     }
 
+@app.get("/api/root/face/challenge")
+def root_face_challenge(request: Request):
+    nonce = secrets.token_urlsafe(24) # 生成一个随机字符串(挑战码),长度为24个URL安全的字符,用于人脸登录的防重放攻击
+    request.session["root_face_nonce"] = nonce
+    return {"nonce": nonce, "ttl_s": 120} # 返回给前端两个东西 nonce(用于做人脸验证的挑战码)和(有效时间)
+
+
+@app.post("/api/root/face/preview")
+def root_face_preview(req: RootFacePreviewReq, db: Session = Depends(get_db)):
+    email = req.email.strip().lower()
+
+    if not ROOT_EMAIL or not hmac.compare_digest(email, ROOT_EMAIL):
+        raise HTTPException(status_code=403, detail="Face preview is root-only")
+
+    user = db.query(User).filter(User.email == email).first()
+    if not user or user.role != "root":
+        raise HTTPException(status_code=403, detail="Root account not found")
+
+    row = db.execute(
+        text("SELECT embedding_json, threshold FROM user_face_credentials WHERE user_id = :uid"), # :uid是SQL参数占位符,后面将其替换为user.id
+        {"uid": user.id}, # 最后的WHERE筛选多加一层限制只查找当前用户的
+    ).fetchone() # 从结果中取第一行数据
+    if not row:
+        raise HTTPException(status_code=400, detail="Root face not enrolled")
+
+    try:
+        info = face_engine.extract_face_embedding_and_bbox(req.image_b64)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    emb_saved = json.loads(row[0]) # 将字符串转回Python数组
+    threshold = float(row[1] if row[1] is not None else 0.45)
+    score = face_engine.cosine_similarity(info["embedding"], emb_saved)
+
+    # 该后端接口最终返回给前端的JSON数据
+    return {
+        "ok": True,
+        "matched": score >= threshold,
+        "score": score,
+        "threshold": threshold,
+        "bbox": info["bbox"],
+    }
+
+
+@app.post("/api/root/face/login")
+def root_face_login(req: RootFaceLoginReq, request: Request, db: Session = Depends(get_db)):
+    email = req.email.strip().lower()
+
+    # 只允许 ROOT_EMAIL 人脸登录
+    if not ROOT_EMAIL or not hmac.compare_digest(email, ROOT_EMAIL):
+        raise HTTPException(status_code=403, detail="Face login is root-only")
+
+    # nonce: 一次性挑战码(challenge),存入 session 并返回给前端
+    # 前端在登录时必须携带该 nonce,后端验证后立即销毁
+    # 用于防止请求被截获后重复利用(Replay Attack)
+    nonce_in_session = request.session.get("root_face_nonce", "")
+    request.session.pop("root_face_nonce", None) # pop是字典方法,从session里取出root_face_nonce的值(如果没有就返回空字符串),然后删除这个键值对(防止重放攻击)
+    if not nonce_in_session or not hmac.compare_digest(req.nonce, nonce_in_session):
+        raise HTTPException(status_code=400, detail="Invalid nonce")
+
+    user = db.query(User).filter(User.email == email).first()
+    if not user or user.role != "root":
+        raise HTTPException(status_code=403, detail="Root account not found")
+
+    # 数据库中存的embedding_json是JSON字符串,类似于"[0.12, -0.33, 0.89, ...]"
+    # 取出来之后row是元组,类似于row = ('[0.12, -0.33, ...]', 0.45)
+    row = db.execute(
+        text("SELECT embedding_json, threshold FROM user_face_credentials WHERE user_id = :uid"), 
+        {"uid": user.id},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=400, detail="Root face not enrolled")
+
+    try:
+        emb_live = face_engine.extract_normed_embedding(req.image_b64)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    emb_saved = json.loads(row[0])
+    threshold = float(row[1] if row[1] is not None else 0.45)
+
+    score = face_engine.cosine_similarity(emb_live, emb_saved)
+    if score < threshold:
+        raise HTTPException(status_code=401, detail=f"Face mismatch (score={score:.4f})")
+
+    request.session["uid"] = user.id # 将当前登录用户的id写进session,后续请求就能通过这个id识别用户身份(调用require_user函数)
+    return {"ok": True, "email": user.email, "role": user.role, "score": score}
+
+
+@app.post("/api/root/face/enroll")
+def root_face_enroll(req: RootFaceEnrollReq, root: User = Depends(require_root), db: Session = Depends(get_db)):
+    try:
+        emb = face_engine.extract_normed_embedding(req.image_b64)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    emb_json = json.dumps(emb) # 将Python列表对象转成JSON字符串,方便存进数据库
+
+    exists = db.execute(
+        text("SELECT id FROM user_face_credentials WHERE user_id = :uid"),
+        {"uid": root.id},
+    ).fetchone()
+
+    if exists: # 存在就更新
+        db.execute(
+            text(
+                "UPDATE user_face_credentials "
+                "SET embedding_json = :emb, updated_at = CURRENT_TIMESTAMP " # CURRENT_TIMESTAMP是SQL内置函数,表示数据库自动记录更新时间
+                "WHERE user_id = :uid"
+            ),
+            {"emb": emb_json, "uid": root.id},
+        )
+    else: # 不存在就插入
+        db.execute(
+            text(
+                "INSERT INTO user_face_credentials(user_id, embedding_json, threshold) " # 插入这3列数据
+                "VALUES(:uid, :emb, :th)" # 指定插入的值
+            ),
+            {"uid": root.id, "emb": emb_json, "th": 0.45},
+        )
+
+    db.commit() # 将上面的修改真正写入数据库,否则修改只存在内存里,程序结束就没了
+    return {"ok": True}
+
+
 # ------------------------- 前端资源和首页路由 -------------------------
 # 1.用户访问 /
 # 2.返回index.html
@@ -324,7 +493,7 @@ def chat(req: ChatRequest, user: User = Depends(require_user)):
 #--------------------------------------------------------------------
 
 
-# 把本地文件夹 webapp/static 挂载到网站的 /static 路径下，让浏览器可以直接访问里面的前端文件
+# 把本地文件夹 webapp/static 挂载到网站的 /static 路径下,让浏览器可以直接访问里面的前端文件
 app.mount("/static", StaticFiles(directory="webapp/static"), name="static")
 
 
